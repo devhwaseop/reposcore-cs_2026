@@ -7,9 +7,9 @@
 ```bash
 sudo apt update
 ```
-그 다음 .NET SDK를 설치합니다.
+그 다음 최신버전 .NET SDK를 설치합니다.
 ```bash
-sudo apt install -y dotnet-sdk-8.0
+sudo apt install -y dotnet-sdk-10.0
 ```
 설치가 완료되면 아래 명령어로 정상 설치 여부를 확인할 수 있습니다.
 ```bash
