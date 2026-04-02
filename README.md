@@ -1,5 +1,5 @@
 # reposcore-cs
-- A CLI for scoring student participation in an open-source class repo, implemented in C# using GraphQL
+A CLI for scoring student participation in an open-source class repo, implemented in C# using GraphQL
 
 ## .md(Markdown) 문서 작성에 대한 표준 가이드
 
