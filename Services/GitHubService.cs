@@ -1,155 +1,103 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using Octokit;
+using Octokit.GraphQL;
+using Octokit.GraphQL.Model;
 
 namespace RepoScore.Services
 {
     public class GitHubService
     {
-        private readonly GitHubClient _client;
+        private readonly Connection _connection;
         private readonly string _owner;
         private readonly string _repo;
 
-        public GitHubService(string owner, string repo, string? token = null)
+        public GitHubService(string owner, string repo, string token)
         {
             _owner = owner ?? throw new ArgumentNullException(nameof(owner));
             _repo = repo ?? throw new ArgumentNullException(nameof(repo));
 
-            _client = new GitHubClient(new ProductHeaderValue("reposcore-cs"));
-
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                _client.Credentials = new Credentials(token);
-            }
+            _connection = new Connection(
+                new ProductHeaderValue("reposcore-cs"),
+                token
+            );
         }
 
         /// <summary>
-        /// 레포지토리의 이슈 목록을 조회합니다. (Pull Request 제외)
+        /// 이슈 + PR + 커밋을 단일 API 호출로 조회
+        /// 필요한 데이터만 선택적으로 가져옴
         /// </summary>
-        public async Task<IReadOnlyList<Issue>> GetIssuesAsync(ItemStateFilter state = ItemStateFilter.All)
+        public async Task<object> GetRepositorySummaryAsync(DateTimeOffset? since = null)
         {
             try
             {
-                var request = new RepositoryIssueRequest
-                {
-                    State = state,
-                    Filter = IssueFilter.All
-                };
+                var query =
+                    from repo in _connection.Repository(_owner, _repo)
+                    select new
+                    {
+                        // 이슈 (서버 필터링 + 필요한 필드만)
+                        Issues = repo.Issues(
+                                first: 20,
+                                states: new[] { IssueState.Open, IssueState.Closed },
+                                filterBy: since.HasValue
+                                    ? new IssueFilters { Since = since.Value }
+                                    : null
+                            )
+                            .Nodes
+                            .Select(i => new
+                            {
+                                i.Number,
+                                i.Title,
+                                i.State,
+                                i.CreatedAt,
 
-                var allItems = await _client.Issue.GetAllForRepository(_owner, _repo, request);
+                                // 댓글 일부만
+                                Comments = i.Comments(first: 3)
+                                    .Nodes
+                                    .Select(c => new
+                                    {
+                                        c.Author.Login,
+                                        c.Body
+                                    })
+                            }),
 
-                // GitHub API는 PR도 Issue로 반환하므로 순수 Issue만 필터링
-                var issues = new List<Issue>();
-                foreach (var item in allItems)
-                {
-                    if (item.PullRequest == null)
-                        issues.Add(item);
-                }
+                        // PR (필요한 필드만)
+                        PullRequests = repo.PullRequests(
+                                first: 20,
+                                states: new[] { PullRequestState.Open, PullRequestState.Closed }
+                            )
+                            .Nodes
+                            .Select(pr => new
+                            {
+                                pr.Number,
+                                pr.Title,
+                                pr.State,
+                                pr.CreatedAt,
+                                Author = pr.Author.Login
+                            }),
 
-                return issues.AsReadOnly();
-            }
-            catch (AuthorizationException ex)
-            {
-                throw new InvalidOperationException("GitHub 인증에 실패했습니다. 토큰을 확인해주세요.", ex);
-            }
-            catch (NotFoundException ex)
-            {
-                throw new InvalidOperationException($"레포지토리 '{_owner}/{_repo}'를 찾을 수 없습니다.", ex);
-            }
-            catch (RateLimitExceededException ex)
-            {
-                throw new InvalidOperationException(
-                    $"GitHub API 요청 한도를 초과했습니다. 재시도 가능 시각: {ex.Reset.ToLocalTime()}", ex);
-            }
-            catch (ApiException ex)
-            {
-                throw new InvalidOperationException($"GitHub API 오류가 발생했습니다: {ex.Message}", ex);
-            }
-        }
+                        // 커밋 (브랜치 기준 + 일부만)
+                        Commits = repo.Ref("refs/heads/main")
+                            .Target
+                            .Cast<Commit>()
+                            .History(first: 20)
+                            .Select(c => new
+                            {
+                                c.Message,
+                                c.CommittedDate,
+                                Author = c.Author.Name
+                            }),
 
-        /// <summary>
-        /// 레포지토리의 Pull Request 목록을 조회합니다.
-        /// </summary>
-        public async Task<IReadOnlyList<PullRequest>> GetPullRequestsAsync(ItemStateFilter state = ItemStateFilter.All)
-        {
-            try
-            {
-                var request = new PullRequestRequest
-                {
-                    State = state
-                };
+                        // Count만 필요한 경우 (핵심 최적화)
+                        IssueCount = repo.Issues(null, null, null).TotalCount,
+                        PullRequestCount = repo.PullRequests(null, null, null).TotalCount
+                    };
 
-                return await _client.PullRequest.GetAllForRepository(_owner, _repo, request);
+                return await query.FirstAsync();
             }
-            catch (AuthorizationException ex)
+            catch (Exception ex)
             {
-                throw new InvalidOperationException("GitHub 인증에 실패했습니다. 토큰을 확인해주세요.", ex);
-            }
-            catch (NotFoundException ex)
-            {
-                throw new InvalidOperationException($"레포지토리 '{_owner}/{_repo}'를 찾을 수 없습니다.", ex);
-            }
-            catch (RateLimitExceededException ex)
-            {
-                throw new InvalidOperationException(
-                    $"GitHub API 요청 한도를 초과했습니다. 재시도 가능 시각: {ex.Reset.ToLocalTime()}", ex);
-            }
-            catch (ApiException ex)
-            {
-                throw new InvalidOperationException($"GitHub API 오류가 발생했습니다: {ex.Message}", ex);
-            }
-        }
-
-        /// <summary>
-        /// 레포지토리의 커밋 목록을 조회합니다.
-        /// </summary>
-        public async Task<IReadOnlyList<GitHubCommit>> GetCommitsAsync(string? branch = null, DateTimeOffset? since = null, DateTimeOffset? until = null)
-        {
-            try
-            {
-                var request = new CommitRequest();
-
-                if (!string.IsNullOrWhiteSpace(branch))
-                    request.Sha = branch;
-                if (since.HasValue)
-                    request.Since = since;
-                if (until.HasValue)
-                    request.Until = until;
-
-                return await _client.Repository.Commit.GetAll(_owner, _repo, request);
-            }
-            catch (AuthorizationException ex)
-            {
-                throw new InvalidOperationException("GitHub 인증에 실패했습니다. 토큰을 확인해주세요.", ex);
-            }
-            catch (NotFoundException ex)
-            {
-                throw new InvalidOperationException($"레포지토리 '{_owner}/{_repo}'를 찾을 수 없습니다.", ex);
-            }
-            catch (RateLimitExceededException ex)
-            {
-                throw new InvalidOperationException(
-                    $"GitHub API 요청 한도를 초과했습니다. 재시도 가능 시각: {ex.Reset.ToLocalTime()}", ex);
-            }
-            catch (ApiException ex)
-            {
-                throw new InvalidOperationException($"GitHub API 오류가 발생했습니다: {ex.Message}", ex);
-            }
-        }
-
-        /// <summary>
-        /// 현재 인증된 사용자의 GitHub API 요청 한도 정보를 반환합니다.
-        /// </summary>
-        public async Task<MiscellaneousRateLimit> GetRateLimitAsync()
-        {
-            try
-            {
-                return await _client.RateLimit.GetRateLimits();
-            }
-            catch (ApiException ex)
-            {
-                throw new InvalidOperationException($"Rate limit 정보를 가져오는 데 실패했습니다: {ex.Message}", ex);
+                throw new InvalidOperationException($"GraphQL 조회 실패: {ex.Message}", ex);
             }
         }
     }
