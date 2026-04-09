@@ -4,7 +4,6 @@
 
 <!-- DOC_LIST_START -->
 - [cocona-guide.md](./cocona-guide.md): Cocona 라이브러리 가이드
-- [codespaces-rebuild-guide.md](./codespaces-rebuild-guide.md): Codespaces에서 변경된 devcontainer 설정 적용 방법 (Rebuild)
 - [csharp-convention.md](./csharp-convention.md): C# 코딩 컨벤션 가이드
 - [docker-guide.md](./docker-guide.md): Docker 설치 및 구동 가이드
 - [dotnet-guide.md](./dotnet-guide.md): C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드
