@@ -33,14 +33,14 @@ dotnet build
 
 ### 4. 실행
 
-특정 GitHub 저장소를 분석하려면 저장소 경로(`owner/repo`)를 인수로 전달합니다. 다양한 옵션을 통해 분석 범위를 제한할 수 있습니다.
+특정 GitHub 저장소를 분석하려면 저장소 경로(`owner/repo`)를 인수로 전달합니다.
 
 ```bash
 # 기본 실행 예시
 dotnet run -- oss2026hnu/reposcore-cs
 
-# 특정 브랜치 및 기간 설정 예시
-dotnet run -- oss2026hnu/reposcore-cs --branch main --since 2026-03-01 --until 2026-03-31
+# 개인 액세스 토큰(PAT) 사용 예시
+dotnet run -- oss2026hnu/reposcore-cs --token YOUR_GITHUB_TOKEN
 
 # 도움말 출력 (모든 인수 및 옵션 확인)
 dotnet run -- --help
@@ -49,18 +49,15 @@ dotnet run -- --help
 ### 5. 사용법
 
 ```text
-Usage: reposcore-cs <repo> [options]
+Usage: reposcore-cs <repo> [[--token <String>]]
 
 Arguments:
-  0: repo    분석할 GitHub 저장소 (예: owner/repo) (Required)
+  0: repo    대상 GitHub 저장소 (예: owner/repo)
 
 Options:
-  -t, --token <String>     GitHub Personal Access Token (비공개 저장소 접근 및 속도 제한 방지)
-  -b, --branch <String>    분석할 특정 브랜치 (기본값: 기본 브랜치)
-  --since <DateTimeOffset> 분석 시작 날짜 (형식: YYYY-MM-DD)
-  --until <DateTimeOffset> 분석 종료 날짜 (형식: YYYY-MM-DD)
-  -h, --help               Show help message
-  --version                Show version
+  -t, --token <String>    GitHub 개인 액세스 토큰 (PAT)
+  -h, --help              Show help message
+  --version               Show version
 ```
 
 > 현재 개발 진행 중으로 상세 분석 기능은 순차적으로 업데이트될 예정입니다.
