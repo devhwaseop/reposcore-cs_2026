@@ -3,7 +3,8 @@ using RepoScore.Data; // 앞서 생성한 ScoreCalculator의 네임스페이스
 
 var app = CoconaApp.Create();
 
-app.AddCommand(([Argument] string repo, [Option('t', Description = "GitHub Personal Access Token")] string? token = null) =>
+app.AddCommand(([Argument(Description = "대상 GitHub 저장소 (예: owner/repo)")] string repo,
+                [Option('t', Description = "GitHub 개인 액세스 토큰 (PAT)")] string? token = null) =>
 {
     Console.WriteLine($"저장소: {repo}");
 
@@ -18,8 +19,6 @@ app.AddCommand(([Argument] string repo, [Option('t', Description = "GitHub Perso
 
     Console.WriteLine();
     Console.WriteLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
-    
-    
     // 메서드 파라미터 순서: (기능/버그PR, 문서PR, 오타PR, 기능/버그이슈, 문서이슈)
     int user1Score = ScoreCalculator.CalculateFinalScore(1, 3, 1, 2, 1);
     Console.WriteLine($"user1, 1, 2, 1, 3, 1, {user1Score}");

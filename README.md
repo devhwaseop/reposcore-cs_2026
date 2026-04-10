@@ -1,4 +1,5 @@
 # reposcore-cs
+
 A CLI for scoring student participation in an open-source class repo, implemented in C# using GraphQL
 
 ## Overview
@@ -10,8 +11,10 @@ A CLI for scoring student participation in an open-source class repo, implemente
 
 ## Quick Start
 
-### 1. .NET 설치
+### 1. 사전 준비
+
 (현재 Codespace에서는 필요없음. 이미 설치되어 있을 것임.)
+
 - [.NET 10.0 SDK](https://dotnet.microsoft.com/download) 설치 필요
   - 자세한 설치 방법은 [docs/dotnet-guide.md](docs/dotnet-guide.md) 참고
 
@@ -31,13 +34,37 @@ dotnet build
 
 ### 4. 실행
 
+특정 GitHub 저장소를 분석하려면 저장소 경로(`owner/repo`)를 인수로 전달합니다.
+
 ```bash
-dotnet run
+# 기본 실행 예시
+dotnet run -- oss2026hnu/reposcore-cs
+
+# 개인 액세스 토큰(PAT) 사용 예시
+dotnet run -- oss2026hnu/reposcore-cs --token YOUR_GITHUB_TOKEN
+
+# 도움말 출력 (모든 인수 및 옵션 확인)
+dotnet run -- --help
 ```
 
-> 현재 개발 진행 중으로 실행 옵션 및 사용법은 추후 업데이트될 예정입니다.
+### 5. 사용법
+
+```text
+Usage: reposcore-cs <repo> [[--token <String>]]
+
+Arguments:
+  0: repo    대상 GitHub 저장소 (예: owner/repo)
+
+Options:
+  -t, --token <String>    GitHub 개인 액세스 토큰 (PAT)
+  -h, --help              Show help message
+  --version               Show version
+```
+
+> 현재 개발 진행 중으로 상세 분석 기능은 순차적으로 업데이트될 예정입니다.
 
 ## GitHub Markdown 문서(확장자 `.md` 파일) 작성에 대한 표준 가이드
 
 ## 참고자료
+
 - GitHub Markdown (확장자 .md 파일) [기본 서식 구문](https://docs.github.com/ko/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
