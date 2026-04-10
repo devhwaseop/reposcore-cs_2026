@@ -4,11 +4,11 @@
 
 <!-- DOC_LIST_START -->
 - [cocona-guide.md](./cocona-guide.md): Cocona 라이브러리 가이드
-- [codespaces-rebuild-guide.md](./codespaces-rebuild-guide.md): Codespaces에서 변경된 devcontainer 설정 적용 방법 (Rebuild)
 - [csharp-convention.md](./csharp-convention.md): C# 코딩 컨벤션 가이드
 - [docker-guide.md](./docker-guide.md): Docker 설치 및 구동 가이드
 - [dotnet-guide.md](./dotnet-guide.md): C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드
 - [git-guide.md](./git-guide.md): git 기초
+- [github-token-guide.md](./github-token-guide.md): GitHub Personal Access Token 가이드
 - [issue-guide.md](./issue-guide.md): 이슈 작업 선점 관련 규정 가이드
 - [octokit-guide.md](./octokit-guide.md): Octokit.NET 활용 가이드
 - [score-guide.md](./score-guide.md): 오픈소스 기여 점수 산정 가이드

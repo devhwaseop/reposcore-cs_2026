@@ -46,7 +46,7 @@ VSCode에서 C# 개발을 시작할 때 필요한 확장 프로그램과 설치 
 
 ---
 
-### 방법 1 — UI에서 수동 설치
+### 방법  — UI에서 수동 설치
 
 1. 확장 메뉴 열기 (`Ctrl + Shift + X`)  
 2. `C# Dev Kit` 검색  
@@ -54,6 +54,68 @@ VSCode에서 C# 개발을 시작할 때 필요한 확장 프로그램과 설치 
 4. 자동 설치 확인  
 
 ---
+
+## 🔄 devcontainer 변경 후 적용 방법 (Rebuild)
+
+### ❗ 개요
+
+devcontainer 설정이 변경된 경우, 기존 Codespace에는  
+변경 사항이 자동으로 반영되지 않습니다.  
+따라서 변경된 환경을 적용하려면 **Rebuild 작업**이 필요합니다.
+
+---
+
+### 📌 Rebuild가 필요한 경우
+
+- `.devcontainer/devcontainer.json` 파일이 수정된 경우  
+- 새로운 VSCode 확장이 devcontainer에 추가된 경우  
+- .NET SDK 또는 런타임 버전이 변경된 경우  
+
+---
+
+### ⚙️ Rebuild 방법
+
+1. 명령 팔레트 열기  
+   - `Ctrl + Shift + P` (macOS: `Cmd + Shift + P`)  
+
+2. 아래 명령어 중 하나 실행  
+
+   - `Codespaces: Rebuild Container`  
+   - `Codespaces: Full Rebuild Container`  
+
+3. Codespace가 재시작되며 변경된 설정이 적용됨  
+
+---
+
+### ⚖️ Rebuild vs Full Rebuild
+
+| 구분 | Rebuild | Full Rebuild |
+|------|--------|-------------|
+| 캐시 | 사용 | 사용 안 함 |
+| 속도 | 빠름 | 느림 |
+| 사용 상황 | 일반적인 설정 변경 | 캐시 문제 발생 시 |
+
+---
+
+### 🌐 웹 Codespaces에서도 동일 적용
+
+브라우저 환경에서도 동일하게  
+`Ctrl + Shift + P` → `Rebuild Container` 실행  
+
+---
+
+### ⚠️ 주의사항
+
+- Rebuild 시 컨테이너 내부 변경 사항이 초기화될 수 있음  
+- 반드시 작업 내용을 **commit & push 후 진행**
+
+---
+
+### ✅ 정리
+
+- devcontainer 변경 → 자동 적용 ❌  
+- Rebuild → 변경 적용 ✔  
+- 문제 발생 시 → Full Rebuild 사용  
 
 ## 🖥 Local 환경
 
