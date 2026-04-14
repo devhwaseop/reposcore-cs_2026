@@ -9,7 +9,7 @@
 - [dotnet-guide.md](./dotnet-guide.md): C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드
 - [git-guide.md](./git-guide.md): git 기초
 - [github-token-guide.md](./github-token-guide.md): GitHub Personal Access Token 가이드
-- [issue-guide.md](./issue-guide.md): 이슈 작업 선점 관련 규정 가이드
+- [issue-pr-guide.md](./issue-pr-guide.md): 이슈 작업 선점 관련 규정 가이드
 - [octokit-guide.md](./octokit-guide.md): Octokit.NET 활용 가이드
 - [score-guide.md](./score-guide.md): 오픈소스 기여 점수 산정 가이드
 - [vscode-extensions.md](./vscode-extensions.md): C# 개발을 위한 VSCode 확장 가이드
