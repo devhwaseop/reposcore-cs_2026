@@ -89,7 +89,7 @@ namespace RepoScore.Services
         }
 
         // 최근 이슈 선점 현황 조회
-        public async Task ShowRecentClaimsAsync()
+        public async Task ShowRecentClaimsAsync(string mode = "issue")
         {
             const string graphQL = @"
                 query($owner: String!, $name: String!) {
@@ -259,12 +259,42 @@ namespace RepoScore.Services
                         }
                     }
                 }
-                foreach (var (login, urls) in claimMap)
+                if (mode == "user")
                 {
-                    Console.WriteLine($"👤 {login}");
-                    foreach (var url in urls)
+                    foreach (var (login, urls) in claimMap)
+                    {
+                        Console.WriteLine($"👤 {login}");
+                        foreach (var url in urls)
+                            Console.WriteLine($" - {url}");
+                    }
+                }
+                else
+                {
+                    var claimedUrls = new HashSet<string>(
+                        claimMap.Values.SelectMany(urls => urls));
+
+                    var unclaimedIssues = new List<string>();
+                    foreach (var issue in nodes.EnumerateArray())
+                    {
+                        if (!issue.TryGetProperty("url", out var u) || u.ValueKind != JsonValueKind.String)
+                            continue;
+                        var url = u.GetString() ?? "";
+                        if (!claimedUrls.Contains(url))
+                            unclaimedIssues.Add(url);
+                    }
+
+                    Console.WriteLine("📋 미선점 이슈");
+                    foreach (var url in unclaimedIssues)
                         Console.WriteLine($" - {url}");
                     Console.WriteLine();
+
+                    Console.WriteLine("📌 선점된 이슈");
+                    foreach (var (login, urls) in claimMap)
+                    {
+                        Console.WriteLine($"👤 {login}");
+                        foreach (var url in urls)
+                            Console.WriteLine($" - {url}");
+                    }
                 }
             }
         }

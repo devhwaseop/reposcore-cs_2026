@@ -7,10 +7,10 @@ var app = CoconaApp.Create();
 app.AddCommand(async (
     [Argument] string repo,
     [Option('t', Description = "GitHub Personal Access Token")] string? token = null,
-    [Option("show-claims", Description = "최근 이슈 선점 현황 조회")] bool showClaims = false
+    [Option("show-claims", Description = "선점 현황 조회 (issue|user, 기본값: issue)")] string? showClaims = null
 ) =>
 {
-if (showClaims)
+if (showClaims != null)
 {
     if (string.IsNullOrEmpty(token))
         token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
@@ -23,7 +23,8 @@ if (showClaims)
 
     var parts = repo.Split('/');
     var service = new GitHubService(parts[0], parts[1], token);
-    await service.ShowRecentClaimsAsync();
+    var mode = string.IsNullOrEmpty(showClaims) ? "issue" : showClaims;
+    await service.ShowRecentClaimsAsync(mode);
     return;
 }
 
