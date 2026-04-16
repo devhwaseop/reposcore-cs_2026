@@ -384,5 +384,33 @@ namespace RepoScore.Services
                 }
             }
         }
+
+        // 모든 기여자의 GitHub ID 목록을 가져오는 메서드
+        public async Task<List<string>> GetAllContributorsAsync()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"repos/{_owner}/{_repo}/contributors");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+
+            var response = await s_httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"기여자 목록 조회 실패: HTTP {(int)response.StatusCode}");
+                return new List<string>();
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(json);
+
+            var contributors = new List<string>();
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (element.TryGetProperty("login", out var loginProp))
+                {
+                    contributors.Add(loginProp.GetString() ?? string.Empty);
+                }
+            }
+
+            return contributors;
+        }
     }
 }
