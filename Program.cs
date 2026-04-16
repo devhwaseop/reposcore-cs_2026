@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Cocona;
 using RepoScore.Data;
@@ -8,12 +9,11 @@ var app = CoconaApp.Create();
 
 app.AddCommand(async (
     [Argument(Description = "대상 저장소 (예: owner/repo)")] string repo,
-    [Argument(Description = "분석할 학생의 GitHub ID (show-claims 사용 시 생략 가능)")] string? userId = null,
     [Option('t', Description = "GitHub Personal Access Token (미입력 시 환경변수 GITHUB_TOKEN 사용)")] string? token = null,
     [Option("show-claims", Description = "최근 이슈 선점 현황 조회")] bool showClaims = false
 ) =>
 {
-    // 1. 토큰 처리 (환경 변수 Fallback)
+    // 1. 토큰 처리
     if (string.IsNullOrEmpty(token))
         token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 
@@ -43,33 +43,40 @@ app.AddCommand(async (
         return;
     }
 
-    // 4. 기여도 산출 모드 (기본 동작)
-    if (string.IsNullOrEmpty(userId))
-    {
-        Console.WriteLine("오류: 점수를 산출할 학생의 GitHub ID를 입력해주세요.");
-        return;
-    }
-
+    // 4. 전체 기여자 점수 산출 모드
     Console.WriteLine($"저장소: {repo}");
     Console.WriteLine($"토큰 인증 사용 중 (토큰: {token[..Math.Min(4, token.Length)]}***)");
-    Console.WriteLine();
+    Console.WriteLine("모든 기여자의 데이터를 조회 중입니다. 시간이 조금 걸릴 수 있습니다...\n");
 
     try
     {
-        // GitHub API를 통해 실제 데이터 조회
-        int totalPrs = await service.GetPullRequestCountAsync(userId);
-        int totalIssues = await service.GetIssueCountAsync(userId);
+        // 전체 기여자 목록 조회
+        List<string> contributors = await service.GetAllContributorsAsync();
 
-        int finalScore = ScoreCalculator.CalculateFinalScore(
-            featureBugPrCount: totalPrs,
-            docPrCount: 0,
-            typoPrCount: 0,
-            featureBugIssueCount: totalIssues,
-            docIssueCount: 0
-        );
+        if (contributors.Count == 0)
+        {
+            Console.WriteLine("조회된 기여자가 없습니다.");
+            return;
+        }
 
         Console.WriteLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
-        Console.WriteLine($"{userId}, 0, {totalIssues}, 0, 0, {totalPrs}, {finalScore}");
+
+        // 기여자 목록을 순회하며 점수 산출
+        foreach (var user in contributors)
+        {
+            int totalPrs = await service.GetPullRequestCountAsync(user);
+            int totalIssues = await service.GetIssueCountAsync(user);
+
+            int finalScore = ScoreCalculator.CalculateFinalScore(
+                featureBugPrCount: totalPrs,
+                docPrCount: 0,
+                typoPrCount: 0,
+                featureBugIssueCount: totalIssues,
+                docIssueCount: 0
+            );
+
+            Console.WriteLine($"{user}, 0, {totalIssues}, 0, 0, {totalPrs}, {finalScore}");
+        }
     }
     catch (Exception ex)
     {
