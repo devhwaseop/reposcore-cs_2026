@@ -26,6 +26,10 @@ namespace RepoScore.Services
         private static readonly string[] s_claimKeywords =
             ["제가 하겠습니다", "진행하겠습니다", "할게요", "I'll take this"];
 
+        // 작업 유형별 기한 (이슈 제목 키워드 기반 추론)
+        private static readonly string[] s_docKeywords =
+            ["doc", "docs", "문서", "readme", "guide", "typo", "오타"];
+
         static GitHubService()
         {
             s_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("reposcore-cs");
@@ -88,6 +92,86 @@ namespace RepoScore.Services
             return new List<string>(result);
         }
 
+        // 이슈 번호로 연결된 오픈 PR 존재 여부 확인
+        private async Task<bool> HasLinkedPullRequestAsync(int issueNumber)
+        {
+            // GitHub REST API: 이슈에 연결된 타임라인 이벤트에서 cross-referenced PR 확인
+            // 또는 Search API로 해당 이슈를 닫는 PR 조회
+            var url = $"repos/{_owner}/{_repo}/issues/{issueNumber}/timeline";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            // timeline API에는 preview 헤더 필요
+            request.Headers.Accept.ParseAdd("application/vnd.github.mockingbird-preview+json");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await s_httpClient.SendAsync(request);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (!response.IsSuccessStatusCode)
+                return false;
+
+            var body = await response.Content.ReadAsStringAsync();
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(body);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+
+            using (document)
+            {
+                var root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Array)
+                    return false;
+
+                foreach (var evt in root.EnumerateArray())
+                {
+                    if (!evt.TryGetProperty("event", out var evtType))
+                        continue;
+
+                    // "cross-referenced" 이벤트 중 PR이 이슈를 closes 하는 경우
+                    if (evtType.GetString() == "cross-referenced"
+                        && evt.TryGetProperty("source", out var source)
+                        && source.TryGetProperty("type", out var sourceType)
+                        && sourceType.GetString() == "issue"
+                        && source.TryGetProperty("issue", out var linkedIssue)
+                        && linkedIssue.TryGetProperty("pull_request", out _))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        // 이슈 제목으로 문서/오타 작업인지 추론 (기한 결정용)
+        private static bool IsDocumentTask(string issueTitle)
+        {
+            var lower = issueTitle.ToLowerInvariant();
+            return s_docKeywords.Any(k => lower.Contains(k));
+        }
+
+        // 남은 시간 문자열 생성
+        private static string FormatRemainingTime(TimeSpan remaining)
+        {
+            if (remaining <= TimeSpan.Zero)
+                return "⌛ 기한 초과";
+
+            return $"⏳ 남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
+        }
+
         // 최근 이슈 선점 현황 조회
         public async Task ShowRecentClaimsAsync(string mode = "issue")
         {
@@ -96,6 +180,8 @@ namespace RepoScore.Services
                   repository(owner: $owner, name: $name) {
                     issues(first: 20, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
                       nodes {
+                        number
+                        title
                         url
                         comments(first: 10) {
                           nodes {
@@ -212,7 +298,7 @@ namespace RepoScore.Services
                 var now = DateTimeOffset.UtcNow;
                 Console.WriteLine("📌 최근 이슈 선점 현황\n");
 
-                var claimMap = new Dictionary<string, List<string>>();
+                var claimMap = new Dictionary<string, List<(string Url, bool HasPr, TimeSpan Remaining)>>();
 
                 foreach (var issue in nodes.EnumerateArray())
                 {
@@ -220,6 +306,16 @@ namespace RepoScore.Services
                         continue;
 
                     var issueUrl = urlProperty.GetString() ?? string.Empty;
+
+                    // 이슈 번호 및 제목 추출
+                    var issueNumber = issue.TryGetProperty("number", out var numProp)
+                        ? numProp.GetInt32()
+                        : 0;
+
+                    var issueTitle = issue.TryGetProperty("title", out var titleProp)
+                        && titleProp.ValueKind == JsonValueKind.String
+                        ? titleProp.GetString() ?? string.Empty
+                        : string.Empty;
 
                     if (!issue.TryGetProperty("comments", out var comments) || comments.ValueKind != JsonValueKind.Object)
                         continue;
@@ -237,10 +333,10 @@ namespace RepoScore.Services
                         if (!comment.TryGetProperty("createdAt", out var createdAtProperty) || createdAtProperty.ValueKind != JsonValueKind.String)
                             continue;
 
-                        if (!DateTimeOffset.TryParse(createdAtProperty.GetString(), out var createdAt))
+                        if (!DateTimeOffset.TryParse(createdAtProperty.GetString(), out var claimedAt))
                             continue;
 
-                        if ((now - createdAt).TotalHours > 48)
+                        if ((now - claimedAt).TotalHours > 48)
                             continue;
 
                         if (!comment.TryGetProperty("author", out var author) || author.ValueKind != JsonValueKind.Object)
@@ -250,28 +346,50 @@ namespace RepoScore.Services
                             ? loginProperty.GetString() ?? "unknown"
                             : "unknown";
 
-                        if (s_claimKeywords.Any(k => commentBody.Contains(k, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            if (!claimMap.ContainsKey(login))
-                                claimMap[login] = new List<string>();
-                            claimMap[login].Add(issueUrl);
-                            break;
-                        }
+                        if (!s_claimKeywords.Any(k => commentBody.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                            continue;
+
+                        // 작업 유형에 따른 기한 결정
+                        bool isDoc = IsDocumentTask(issueTitle);
+                        double deadlineHours = isDoc ? 24.0 : 48.0;
+                        var deadline = claimedAt.AddHours(deadlineHours);
+                        var remaining = deadline - now;
+
+                        // PR 연결 여부 확인
+                        bool hasPr = issueNumber > 0 && await HasLinkedPullRequestAsync(issueNumber);
+
+                        // 유저별 딕셔너리에 수집
+                        if (!claimMap.ContainsKey(login))
+                            claimMap[login] = new List<(string, bool, TimeSpan)>();
+                        claimMap[login].Add((issueUrl, hasPr, remaining));
+                        break;
                     }
                 }
-                if (mode == "user")
+
+                // 출력
+                if (claimMap.Count == 0)
                 {
-                    foreach (var (login, urls) in claimMap)
+                    Console.WriteLine("최근 48시간 내 선점된 이슈가 없습니다.");
+                }
+                else if (mode == "user")
+                {
+                    foreach (var (login, claims) in claimMap)
                     {
                         Console.WriteLine($"👤 {login}");
-                        foreach (var url in urls)
+                        foreach (var (url, hasPr, remaining) in claims)
+                        {
                             Console.WriteLine($" - {url}");
+                            if (hasPr)
+                                Console.WriteLine($"   ✅ PR 생성됨");
+                            else
+                                Console.WriteLine($"   {FormatRemainingTime(remaining)}");
+                        }
                     }
                 }
                 else
                 {
                     var claimedUrls = new HashSet<string>(
-                        claimMap.Values.SelectMany(urls => urls));
+                        claimMap.Values.SelectMany(c => c.Select(x => x.Url)));
 
                     var unclaimedIssues = new List<string>();
                     foreach (var issue in nodes.EnumerateArray())
@@ -289,14 +407,48 @@ namespace RepoScore.Services
                     Console.WriteLine();
 
                     Console.WriteLine("📌 선점된 이슈");
-                    foreach (var (login, urls) in claimMap)
+                    foreach (var (login, claims) in claimMap)
                     {
                         Console.WriteLine($"👤 {login}");
-                        foreach (var url in urls)
+                        foreach (var (url, hasPr, remaining) in claims)
+                        {
                             Console.WriteLine($" - {url}");
+                            if (hasPr)
+                                Console.WriteLine($"   ✅ PR 생성됨");
+                            else
+                                Console.WriteLine($"   {FormatRemainingTime(remaining)}");
+                        }
                     }
                 }
             }
+        }
+
+        // 모든 기여자의 GitHub ID 목록을 가져오는 메서드
+        public async Task<List<string>> GetAllContributorsAsync()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"repos/{_owner}/{_repo}/contributors");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+
+            var response = await s_httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"기여자 목록 조회 실패: HTTP {(int)response.StatusCode}");
+                return new List<string>();
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(json);
+
+            var contributors = new List<string>();
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (element.TryGetProperty("login", out var loginProp))
+                {
+                    contributors.Add(loginProp.GetString() ?? string.Empty);
+                }
+            }
+
+            return contributors;
         }
     }
 }
